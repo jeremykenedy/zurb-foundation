@@ -151,11 +151,11 @@ class ZurbFoundationPreset extends Preset
         });
     }
 
-     /**
-      * Compile welcome page controller file content.
-      *
-      * @return string
-      */
+    /**
+     * Compile welcome page controller file content.
+     *
+     * @return string
+     */
     private static function compileHomeControllerStub()
     {
         return Str::replaceFirst(
