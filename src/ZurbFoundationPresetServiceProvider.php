@@ -18,13 +18,13 @@ class ZurbFoundationPresetServiceProvider extends ServiceProvider
             ZurbFoundationPreset::install();
 
             $command->info('Foundation scaffolding installed successfully.');
-            $command->comment('Please run "npm install && npm run dev" to compile your fresh scaffolding.');
-        });
 
-        UiCommand::macro('foundation-auth', function ($command) {
-            ZurbFoundationPreset::install(true);
+            if ($command->option('auth')) {
+                ZurbFoundationPreset::installAuth();
 
-            $command->info('Foundation scaffolding with auth views installed successfully.');
+                $command->info('Foundation auth scaffolding installed successfully.');
+            }
+
             $command->comment('Please run "npm install && npm run dev" to compile your fresh scaffolding.');
         });
     }

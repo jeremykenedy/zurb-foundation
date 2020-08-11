@@ -13,22 +13,24 @@ class ZurbFoundationPreset extends Preset
      *
      * @return void
      */
-    public static function install($withAuth = false)
+    public static function install()
     {
         static::updatePackages();
         static::updateSass();
         static::updateBootstrapping();
-
-        if($withAuth)
-        {
-            static::addAuthTemplates();
-        }
-        else
-        {
-            static::updateWelcomePage();
-        }
-
+        static::updateWelcomePage();
         static::removeNodeModules();
+    }
+
+    /**
+     * Install the preset with auth.
+     *
+     * @return void
+     */
+    public static function installAuth()
+    {
+        static::updateAuthControllers();
+        static::updateAuthTemplates();
     }
 
     /**
@@ -40,8 +42,8 @@ class ZurbFoundationPreset extends Preset
     protected static function updatePackageArray(array $packages)
     {
         return [
-            'foundation-sites' => '^6.5',
-            'jquery' => '^3.2',
+            'foundation-sites' => '^6.6',
+            'jquery' => '^3.5',
         ] + Arr::except($packages, [
             'bootstrap',
             'bootstrap-sass',
@@ -51,70 +53,112 @@ class ZurbFoundationPreset extends Preset
     }
 
     /**
-     * Update the Sass files for the application.
+     * Update the SASS files.
      *
      * @return void
      */
     protected static function updateSass()
     {
-        // clean up orphan files
-        $orphan_sass_files = glob(resource_path('/sass/*.*'));
+        tap(new Filesystem, function ($filesystem) {
+            $filesystem->deleteDirectory(resource_path('css'));
+            $filesystem->delete(public_path('js/app.js'));
+            $filesystem->delete(public_path('css/app.css'));
 
-        foreach($orphan_sass_files as $sass_file)
-        {
-            (new Filesystem)->delete($sass_file);
-        }
+            if (! $filesystem->isDirectory($directory = resource_path('sass'))) {
+                $filesystem->makeDirectory($directory, 0755, true);
+            }
 
-        copy(__DIR__.'/foundation-stubs/_settings.scss', resource_path('sass/_settings.scss'));
-        copy(__DIR__.'/foundation-stubs/foundation.scss', resource_path('sass/foundation.scss'));
-        copy(__DIR__.'/foundation-stubs/app.scss', resource_path('sass/app.scss'));
+            $filesystem->copyDirectory(__DIR__.'/foundation-stubs/resources/sass', resource_path('sass'));
+        });
     }
 
     /**
-     * Update the bootstrapping files.
+     * Update the bootstrapping JS files.
      *
      * @return void
      */
     protected static function updateBootstrapping()
     {
-        (new Filesystem)->delete(
-            resource_path('js/bootstrap.js')
-        );
+        tap(new Filesystem, function ($filesystem) {
+            if (! $filesystem->isDirectory($directory = resource_path('js'))) {
+                $filesystem->makeDirectory($directory, 0755, true);
+            }
 
-        copy(__DIR__.'/foundation-stubs/bootstrap.js', resource_path('js/bootstrap.js'));
+            $filesystem->copy(__DIR__.'/foundation-stubs/resources/js/bootstrap.js', resource_path('js/bootstrap.js'));
+        });
     }
 
     /**
-     * Update the default welcome page file with Foundation buttons.
+     * Update the welcome page template file.
      *
      * @return void
      */
     protected static function updateWelcomePage()
     {
-        // remove default welcome page
-        (new Filesystem)->delete(
-            resource_path('views/welcome.blade.php')
-        );
-
-        // copy new one with Zurb Foundation buttons
-        copy(__DIR__.'/foundation-stubs/views/welcome.blade.php', resource_path('views/welcome.blade.php'));
+        (new Filesystem)->copy(__DIR__.'/foundation-stubs/resources/views/welcome.blade.php', resource_path('views/welcome.blade.php'));
     }
 
     /**
-     * Copy Zurb Foundation Auth view templates.
+     * Update the auth controllers and web routes.
      *
      * @return void
      */
-    protected static function addAuthTemplates()
+    protected static function updateAuthControllers()
     {
-        // Add Home controller
-        copy(__DIR__.'/foundation-stubs/Controllers/HomeController.php', app_path('Http/Controllers/HomeController.php'));
+        tap(new Filesystem, function ($filesystem) {
+            if (! $filesystem->isDirectory($directory = app_path('Http/Controllers/Auth'))) {
+                $filesystem->makeDirectory($directory, 0755, true);
+            }
 
-        // Add Auth route in 'routes/web.php'
-        $auth_route_entry = "Auth::routes();\n\nRoute::get('/home', 'HomeController@index')->name('home');\n\n";
-        file_put_contents('./routes/web.php', $auth_route_entry, FILE_APPEND);
+            collect($filesystem->allFiles(base_path('vendor/laravel/ui/stubs/Auth')))
+                ->each(function (SplFileInfo $file) use ($filesystem) {
+                    $filesystem->copy(
+                        $file->getPathname(),
+                        app_path('Http/Controllers/Auth/'.Str::replaceLast('.stub', '.php', $file->getFilename()))
+                    );
+                });
+        });
 
-        // Copy Zurb Foundation Auth view templates
-        (new Filesystem)->copyDirectory(__DIR__.'/foundation-stubs/views', resource_path('views'));
+        file_put_contents(app_path('Http/Controllers/HomeController.php'), static::compileHomeControllerStub());
+
+        file_put_contents(
+            base_path('routes/web.php'),
+            "\nAuth::routes();\n\nRoute::get('/home', 'HomeController@index')->name('home');\n",
+            FILE_APPEND
+        );
+    }
+
+    /**
+     * Update the auth templates.
+     *
+     * @return void
+     */
+    protected static function updateAuthTemplates()
+    {
+        tap(new Filesystem, function ($filesystem) {
+            $filesystem->copyDirectory(__DIR__.'/foundation-stubs/resources/views', resource_path('views'));
+
+            collect($filesystem->allFiles(base_path('vendor/laravel/ui/stubs/migrations')))
+                ->each(function (SplFileInfo $file) use ($filesystem) {
+                    $filesystem->copy(
+                        $file->getPathname(),
+                        database_path('migrations/'.$file->getFilename())
+                    );
+                });
+        });
+    }
+
+     /**
+      * Compile welcome page controller file content.
+      *
+      * @return string
+      */
+    private static function compileHomeControllerStub()
+    {
+        return Str::replaceFirst(
+            '{{namespace}}',
+            Container::getInstance()->getNamespace(),
+            file_get_contents(__DIR__.'/foundation-stubs/controllers/HomeController.stub')
+        );
     }
 }
