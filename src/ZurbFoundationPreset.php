@@ -2,9 +2,12 @@
 
 namespace LaravelFrontendPresets\ZurbFoundationPreset;
 
+use Illuminate\Container\Container;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Laravel\Ui\Presets\Preset;
+use Symfony\Component\Finder\SplFileInfo;
 
 class ZurbFoundationPreset extends Preset
 {
